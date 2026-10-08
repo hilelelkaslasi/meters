@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>מוני החשמל בבית</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#16202c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23f2b705'/%3E%3Cpath d='M13 3 5 14h6l-1 7 8-11h-6z' fill='%2316202c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Suez+One&display=swap">
+<style>
+/* Layout: the main meter on top, the two tenant sub-meters under it (mirrors the physical panel), then the reading form and per-meter ledger. */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --sunken:#e3e6ea; --ink:#16202c; --muted:#5a6573; --line:#d3d8de;
+  --amber:#f2b705; --amber-ink:#5a4300; --amber-soft:#fff4cc;
+  --paid:#1f7a4d; --paid-soft:#dcf2e5; --due:#b4401a; --due-soft:#fbe4da;
+  --wheel:#16202c; --wheel-fg:#f4f6f8;
+  --f-display:"Suez One","IBM Plex Sans Hebrew",serif;
+  --f-body:"IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#10151c; --surface:#18202a; --sunken:#0c1117; --ink:#e8edf2; --muted:#9aa6b4; --line:#2a3542;
+  --amber-ink:#ffd75e; --amber-soft:#3a3010;
+  --paid:#5fd29a; --paid-soft:#123826; --due:#ff8a60; --due-soft:#40200f;
+  --wheel:#05080c; --wheel-fg:#eef2f6; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:1080px;margin:0 auto;padding:calc(24px + env(safe-area-inset-top,0px)) 16px calc(64px + env(safe-area-inset-bottom,0px))}
+.num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:12px}
+.bolt{width:40px;height:40px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:none}
+.bolt svg{width:22px;height:22px}
+h1{font-family:var(--f-display);font-weight:400;font-size:28px;line-height:1.1;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:13.5px;margin:2px 0 0}
+.who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.who-chip{font-size:13px;color:var(--muted)}
+.who-chip b{color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:500;font-size:14px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.primary:hover{opacity:.9}
+.btn:disabled{opacity:.5;cursor:wait}
+
+.summary{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline;padding:14px 18px;border-radius:var(--r);background:var(--amber-soft);color:var(--amber-ink);margin-bottom:18px;font-size:14px}
+.summary strong{font-size:20px;font-weight:700}
+.summary .sep{opacity:.35}
+
+.board{display:flex;flex-direction:column;margin-bottom:28px}
+.meter{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;text-align:right}
+button.meter{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+button.meter:hover{border-color:var(--muted)}
+button.meter[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.meter-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.meter-name{font-weight:700;font-size:16.5px}
+.meter-tag{color:var(--muted);font-size:13px}
+.meter-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13.5px;color:var(--muted)}
+.meter-row b{color:var(--ink);font-size:18px;font-weight:600}
+.main-body{display:flex;flex-wrap:wrap;gap:14px 32px;align-items:center}
+.main-stats{display:flex;flex-wrap:wrap;gap:8px 32px;flex:1 1 260px;min-width:0}
+.main-stats > div{white-space:nowrap}
+.main-stats > div{display:flex;flex-direction:column;font-size:13px;color:var(--muted)}
+.main-stats b{color:var(--ink);font-size:20px;font-weight:600}
+.wire{height:22px;position:relative}
+.wire::before{content:"";position:absolute;top:0;bottom:0;right:50%;border-right:2px solid var(--line)}
+.subs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;position:relative;padding-top:22px}
+.subs::before{content:"";position:absolute;top:0;right:25%;left:25%;height:22px;border:2px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0}
+@media (max-width:640px){.subs{grid-template-columns:1fr;padding-top:0}.subs::before{display:none}.wire{height:14px}}
+
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;white-space:nowrap;border:0}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.paid{background:var(--paid-soft);color:var(--paid)}
+.pill.due{background:var(--due-soft);color:var(--due)}
+.pill.base{background:var(--sunken);color:var(--muted)}
+button.pill:hover{filter:brightness(.95)}
+
+.odo{display:inline-flex;direction:ltr;gap:2px;padding:4px;background:var(--wheel);border-radius:6px;align-self:flex-start}
+.odo span{font-family:var(--f-mono);font-weight:600;font-size:20px;line-height:1;color:var(--wheel-fg);width:.9em;text-align:center;padding:6px 0;border-radius:2px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0) 40%,rgba(0,0,0,.25))}
+.odo.lg span{font-size:26px}
+.odo .unitlbl{font-family:var(--f-body);font-size:11px;width:auto;padding:0 6px;align-self:center;background:none;color:var(--wheel-fg);opacity:.6;font-weight:500}
+
+.detail{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.detail{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.card h2{font-size:17px;margin:0 0 4px;font-weight:700}
+.hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label,.field .lbl{font-size:13px;font-weight:600;color:var(--muted)}
+.field label small{font-weight:400}
+.field input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 11px;font-size:16px;width:100%}
+.field input:focus{border-color:var(--ink);outline:none}
+.field input.big{font-family:var(--f-mono);font-size:22px;font-weight:600;letter-spacing:.06em;direction:ltr;text-align:left}
+.seg{display:flex;background:var(--sunken);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:7px;padding:7px 6px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.check{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;margin-bottom:12px;background:var(--amber-soft);color:var(--amber-ink);padding:10px 12px;border-radius:8px}
+.check input{margin-top:4px;accent-color:var(--ink)}
+.preview{border-radius:8px;background:var(--sunken);padding:12px;font-size:13.5px;margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
+.preview .row{display:flex;justify-content:space-between;gap:8px}
+.preview .total{font-weight:700;font-size:16px;border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
+.err{color:var(--due);font-size:13px;margin:-4px 0 10px}
+.ro-note{color:var(--muted);font-size:14px;margin:0 0 12px}
+
+.ledger-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tbl-wrap{overflow-x:auto;margin:0 -18px;padding:0 18px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.amt{font-weight:700;font-size:15px}
+td.mono{font-family:var(--f-mono)}
+.calc{color:var(--muted);font-size:12px;font-weight:400;display:block}
+.row-actions{display:flex;gap:4px;justify-content:flex-end}
+.icon-btn{border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 8px;font-size:12.5px;color:var(--muted)}
+.icon-btn:hover{border-color:var(--line);color:var(--ink)}
+.icon-btn.confirm{color:var(--due);border-color:var(--due)}
+
+.empty{padding:30px 10px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+
+.sheet-bg{position:fixed;inset:0;background:rgba(10,14,20,.45);display:grid;place-items:center;padding:16px;z-index:10}
+.sheet{background:var(--surface);border-radius:14px;padding:22px;width:min(520px,100%);max-height:90vh;overflow:auto;border:1px solid var(--line)}
+.sheet h2{margin:0 0 4px;font-size:19px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:480px){.grid2{grid-template-columns:1fr}}
+.sheet-foot{display:flex;gap:8px;margin-top:8px}
+
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:calc(100vw - 32px);text-align:center}
+.status-line{color:var(--muted);font-size:12.5px;margin-top:26px;text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="bolt" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#16202c"/></svg></div>
+      <div>
+        <h1>מוני החשמל בבית</h1>
+        <p class="sub">מונה ראשי ושני מוני משנה · חישוב לפי תעריף ומעקב תשלומים</p>
+      </div>
+    </div>
+    <div class="who" id="who"></div>
+  </header>
+
+  <div class="summary" id="summary"></div>
+  <div class="board" id="board"></div>
+
+  <div class="detail">
+    <section class="card" id="entry"></section>
+    <section class="card" id="ledger"></section>
+  </div>
+
+  <p class="status-line" id="status">טוען נתונים…</p>
+</div>
+
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script>
+// ---- connection (the publishable key is public by design; all writes are checked by codes in the database)
+const SUPABASE_URL = "";
+const SUPABASE_KEY = "";
+
+(() => {
+  const METERS = ["main", "upper", "lower"];
+  const S = {
+    sb: null, ready: false, loadError: false,
+    config: { price: 0.64, fixed: 0, name_upper: "בית עליון", name_lower: "בית תחתון", tenant_upper: "", tenant_lower: "" },
+    readings: [], role: null, pin: null,
+    view: "upper", entryMeter: "main", confirmDel: null, busy: false
+  };
+  try { const saved = JSON.parse(localStorage.getItem("meters.auth") || "null"); if (saved?.pin && saved?.role) { S.pin = saved.pin; S.role = saved.role; } } catch {}
+  if (S.role && S.role !== "owner") { S.view = S.role; S.entryMeter = S.role; }
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const ils = (n) => "₪" + Number(n).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const kwh = (n) => Number(n).toLocaleString("he-IL", { maximumFractionDigits: 1 });
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const fmtDate = (iso) => { if (!iso) return ""; const [y, m, d] = iso.split("-"); return `${d}.${m}.${y.slice(2)}`; };
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const dayNum = (iso) => Date.parse(iso + "T00:00:00Z") / 864e5;
+  const meterName = (m) => m === "main" ? "מונה ראשי" : (S.config["name_" + m] || (m === "upper" ? "בית עליון" : "בית תחתון"));
+  const roleName = (r) => r === "owner" ? "בעל הבית" : meterName(r);
+  const canWrite = (m) => S.role === "owner" || S.role === m;
+
+  // ---- calculations: every meter has its own history; a bill is the difference from that meter's previous reading
+  function rowsOf(m) {
+    const rs = S.readings.filter(r => r.meter === m)
+      .sort((a, b) => a.read_on < b.read_on ? -1 : a.read_on > b.read_on ? 1 : (a.created_at < b.created_at ? -1 : 1));
+    return rs.map((r, i) => {
+      const prev = rs[i - 1];
+      const reading = Number(r.reading), price = Number(r.price), fixed = Number(r.fixed) || 0;
+      if (!prev) return { ...r, reading, price, fixed, prev: null, cons: null, amount: null };
+      const cons = round2(reading - Number(prev.reading));
+      return { ...r, reading, price, fixed, prev: { ...prev, reading: Number(prev.reading) }, cons, amount: m === "main" ? null : round2(cons * price + fixed) };
+    });
+  }
+  // estimated meter value on a date, by linear interpolation between readings
+  function valueAt(m, iso) {
+    const rs = rowsOf(m); if (!rs.length) return null;
+    const t = dayNum(iso);
+    for (let i = 0; i < rs.length; i++) {
+      const ti = dayNum(rs[i].read_on);
+      if (ti === t) return rs[i].reading;
+      if (ti > t) {
+        if (i === 0) return ti - t <= 7 ? rs[0].reading : null;
+        const t0 = dayNum(rs[i - 1].read_on);
+        return rs[i - 1].reading + (rs[i].reading - rs[i - 1].reading) * (t - t0) / (ti - t0);
+      }
+    }
+    // after the last reading: accept it if it was taken within a week
+    const lastR = rs[rs.length - 1];
+    return t - dayNum(lastR.read_on) <= 7 ? lastR.reading : null;
+  }
+
+  function odo(value, cls = "") {
+    const s = Math.floor(Number(value) || 0).toString().padStart(6, "0");
+    return `<span class="odo ${cls}" aria-label="${s} קוט״ש">${[...s].map(c => `<span>${c}</span>`).join("")}<span class="unitlbl">kWh</span></span>`;
+  }
+  const baseLabel = (r) => r.is_opening ? "ששולמה ע״י דיירים קודמים" : "קריאת פתיחה";
+  function pillFor(r) {
+    if (!r) return `<span class="pill base">אין קריאות</span>`;
+    if (!r.prev) return `<span class="pill ${r.is_opening ? "paid" : "base"}">${r.is_opening ? "שולם · דיירים קודמים" : "קריאת פתיחה"}</span>`;
+    return r.paid ? `<span class="pill paid">שולם</span>` : `<span class="pill due">ממתין לתשלום</span>`;
+  }
+
+  // ---- render
+  function render() { renderWho(); renderSummary(); renderBoard(); renderEntry(); renderLedger(); renderStatus(); }
+
+  function renderWho() {
+    $("who").innerHTML = S.role
+      ? `<span class="who-chip">מחובר/ת: <b>${esc(roleName(S.role))}</b></span>
+         ${S.role === "owner" ? `<button class="btn" type="button" data-act="settings">תעריף והגדרות</button>` : ""}
+         <button class="btn" type="button" data-act="logout">יציאה</button>`
+      : `<button class="btn primary" type="button" data-act="login">כניסה עם קוד</button>`;
+  }
+
+  function renderSummary() {
+    let due = 0, dueCount = 0, collected = 0;
+    for (const m of ["upper", "lower"]) for (const r of rowsOf(m)) {
+      if (r.amount == null) continue;
+      if (r.paid) collected += r.amount; else { due += r.amount; dueCount++; }
+    }
+    $("summary").innerHTML = `
+      <span>ממתין לתשלום <strong class="num">${ils(due)}</strong>${dueCount ? ` (${dueCount} ${dueCount === 1 ? "חשבון" : "חשבונות"})` : ""}</span>
+      <span class="sep">|</span>
+      <span>התקבל עד היום <strong class="num">${ils(collected)}</strong></span>`;
+  }
+
+  function renderBoard() {
+    const main = rowsOf("main"), mLast = main[main.length - 1];
+    let mine = null;
+    if (mLast?.prev) {
+      const parts = ["upper", "lower"].map(m => {
+        const a = valueAt(m, mLast.prev.read_on), b = valueAt(m, mLast.read_on);
+        return a == null || b == null ? null : b - a;
+      });
+      if (parts.every(x => x != null)) mine = round2(mLast.cons - parts[0] - parts[1]);
+    }
+    const period = (r) => r?.prev ? ` ${fmtDate(r.prev.read_on)}–${fmtDate(r.read_on)}` : "";
+    const mainCard = `<button type="button" class="meter" data-view="main" aria-pressed="${S.view === "main"}">
+      <div class="meter-head"><div><div class="meter-name">מונה ראשי</div><div class="meter-tag">חברת החשמל · כל הבית</div></div>
+        ${mLast ? `<span class="meter-tag">קריאה אחרונה ${fmtDate(mLast.read_on)}</span>` : `<span class="pill base">אין קריאות</span>`}</div>
+      <div class="main-body">${odo(mLast?.reading, "lg")}
+        <div class="main-stats">
+          <div>צריכה כוללת${period(mLast)}<b class="num">${mLast?.prev ? kwh(mLast.cons) + " קוט״ש" : "—"}</b></div>
+          <div>מזה שלי (בערך)<b class="num">${mine != null ? kwh(mine) + " קוט״ש" : "—"}</b></div>
+        </div></div></button>`;
+    const sub = (m) => {
+      const rs = rowsOf(m), last = rs[rs.length - 1];
+      const tenant = S.config["tenant_" + m];
+      return `<button type="button" class="meter" data-view="${m}" aria-pressed="${S.view === m}">
+        <div class="meter-head"><div><div class="meter-name">${esc(meterName(m))}</div><div class="meter-tag">${tenant ? esc(tenant) : "מונה משנה"}</div></div>${pillFor(last)}</div>
+        ${odo(last?.reading)}
+        <div class="meter-row"><span>צריכה${period(last)}</span><span><b class="num">${last?.prev ? kwh(last.cons) : "—"}</b> קוט״ש</span></div>
+        <div class="meter-row"><span>לתשלום</span><b class="num">${last?.prev ? ils(last.amount) : "—"}</b></div></button>`;
+    };
+    $("board").innerHTML = mainCard + `<div class="wire" aria-hidden="true"></div><div class="subs">${sub("upper")}${sub("lower")}</div>`;
+  }
+
+  function renderEntry() {
+    const el = $("entry");
+    if (!S.role) {
+      el.innerHTML = `<h2>עדכון קריאה</h2><p class="ro-note">כדי להזין קריאת מונה צריך להיכנס עם הקוד שקיבלת מבעל הבית.</p>
+        <button class="btn primary" type="button" data-act="login" style="width:100%">כניסה עם קוד</button>`;
+      return;
+    }
+    const m = S.role === "owner" ? S.entryMeter : S.role;
+    const rs = rowsOf(m), last = rs[rs.length - 1];
+    const keep = (id, d = "") => esc(document.getElementById(id)?.value ?? d);
+    const seg = S.role === "owner" ? `<div class="field"><span class="lbl">איזה מונה</span><div class="seg" role="group">
+      ${METERS.map(x => `<button type="button" data-entry="${x}" aria-pressed="${x === m}">${esc(meterName(x))}</button>`).join("")}</div></div>` : "";
+    const opening = S.role === "owner" && !last
+      ? `<label class="check"><input type="checkbox" id="in-opening" ${document.getElementById("in-opening")?.checked === false ? "" : "checked"}>
+          <span>זו הקריאה האחרונה ששולמה ע״י הדיירים הקודמים. היא תסומן כשולמה ולא תחויב.</span></label>` : "";
+    el.innerHTML = `
+      <h2>קריאה חדשה · ${esc(meterName(m))}</h2>
+      <p class="hint">${last ? `קריאה קודמת: <span class="num">${Number(last.reading).toLocaleString("he-IL")}</span> בתאריך ${fmtDate(last.read_on)}` : "עוד אין קריאות למונה הזה. הקריאה הראשונה היא נקודת ההתחלה ולא מחויבת."}</p>
+      <form id="entry-form" novalidate>
+        ${seg}
+        <div class="field"><label for="in-reading">המספר שמופיע במונה</label>
+          <input id="in-reading" class="big" inputmode="decimal" autocomplete="off" placeholder="${last ? Math.floor(last.reading) : "000000"}" value="${keep("in-reading")}"></div>
+        <div class="field"><label for="in-date">תאריך הקריאה</label><input id="in-date" type="date" max="${today()}" value="${keep("in-date", today())}"></div>
+        ${opening}
+        <div id="entry-preview"></div>
+        <p class="err" id="entry-err" hidden></p>
+        <button class="btn primary" type="submit" style="width:100%" ${S.busy ? "disabled" : ""}>${S.busy ? "שומר…" : "שמירת קריאה"}</button>
+      </form>`;
+    updatePreview();
+  }
+
+  function parseReading() {
+    const raw = ($("in-reading")?.value || "").replace(/[,\s]/g, "");
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function updatePreview() {
+    const box = $("entry-preview"); if (!box) return;
+    const m = S.role === "owner" ? S.entryMeter : S.role;
+    const rs = rowsOf(m), last = rs[rs.length - 1], n = parseReading();
+    if (!last || n == null || Number.isNaN(n) || n < last.reading) { box.innerHTML = ""; return; }
+    const cons = round2(n - last.reading);
+    if (m === "main") { box.innerHTML = `<div class="preview"><div class="row total"><span>צריכה כוללת</span><span class="num">${kwh(cons)} קוט״ש</span></div></div>`; return; }
+    const amount = round2(cons * S.config.price + (S.config.fixed || 0));
+    box.innerHTML = `<div class="preview">
+      <div class="row"><span>צריכה</span><span class="num">${kwh(cons)} קוט״ש</span></div>
+      <div class="row"><span>× תעריף</span><span class="num">${S.config.price} ₪</span></div>
+      ${S.config.fixed ? `<div class="row"><span>+ דמי קבוע</span><span class="num">${ils(S.config.fixed)}</span></div>` : ""}
+      <div class="row total"><span>לתשלום</span><span class="num">${ils(amount)}</span></div></div>`;
+  }
+
+  function canDelete(r, rs) {
+    if (S.role === "owner") return true;
+    if (S.role !== r.meter || r.created_by !== S.role) return false;
+    if (Date.now() - Date.parse(r.created_at) > 864e5) return false;
+    return rs[rs.length - 1].id === r.id;
+  }
+
+  function renderLedger() {
+    const m = S.view, rs = rowsOf(m), list = rs.slice().reverse();
+    const isMain = m === "main";
+    const tabs = `<div class="seg" role="group" aria-label="בחירת מונה">${METERS.map(x => `<button type="button" data-view="${x}" aria-pressed="${x === m}">${esc(meterName(x))}</button>`).join("")}</div>`;
+    let body;
+    if (!list.length) {
+      body = `<div class="empty"><b>עוד אין קריאות ל${esc(meterName(m))}</b>${canWrite(m) ? "הזן/י את מצב המונה בטופס." : "הקריאות יופיעו כאן אחרי שיוזנו."}</div>`;
+    } else {
+      body = `<div class="tbl-wrap"><table>
+        <thead><tr><th>תקופה</th><th>מצב מונה</th><th>צריכה</th>${isMain ? "" : "<th>לתשלום</th><th>סטטוס</th>"}<th></th></tr></thead>
+        <tbody>${list.map(r => {
+          const base = !r.prev;
+          let status = "";
+          if (!isMain) {
+            if (base) status = `<span class="pill ${r.is_opening ? "paid" : "base"}">${r.is_opening ? "שולם" : "פתיחה"}</span>`;
+            else if (S.role === "owner") status = `<button type="button" class="pill ${r.paid ? "paid" : "due"}" data-toggle="${r.id}">${r.paid ? "שולם" : "לא שולם"}</button>`;
+            else status = `<span class="pill ${r.paid ? "paid" : "due"}">${r.paid ? "שולם" : "לא שולם"}</span>`;
+          }
+          const confirming = S.confirmDel === r.id;
+          const actions = [
+            !isMain && !base ? `<button type="button" class="icon-btn" data-copy="${r.id}">העתקת הודעה</button>` : "",
+            canDelete(r, rs) ? `<button type="button" class="icon-btn ${confirming ? "confirm" : ""}" data-del="${r.id}">${confirming ? "למחוק?" : "מחיקה"}</button>` : ""
+          ].join("");
+          return `<tr>
+            <td>${base ? `${fmtDate(r.read_on)}<span class="calc">${baseLabel(r)}</span>` : `${fmtDate(r.prev.read_on)} – ${fmtDate(r.read_on)}`}${r.paid && r.paid_on && !base ? `<span class="calc">שולם ב-${fmtDate(r.paid_on)}</span>` : ""}</td>
+            <td class="mono num">${Number(r.reading).toLocaleString("he-IL")}</td>
+            <td class="num">${base ? "—" : kwh(r.cons) + " קוט״ש"}</td>
+            ${isMain ? "" : `<td class="amt">${base ? "—" : `<span class="num">${ils(r.amount)}</span><span class="calc num">${kwh(r.cons)} × ${r.price}${r.fixed ? ` + ${r.fixed}` : ""}</span>`}</td><td>${status}</td>`}
+            <td><div class="row-actions">${actions}</div></td></tr>`;
+        }).join("")}</tbody></table></div>`;
+    }
+    $("ledger").innerHTML = `<div class="ledger-head"><h2>היסטוריית קריאות</h2>${tabs}</div>${body}`;
+  }
+
+  function renderStatus() {
+    $("status").textContent = !S.sb ? "האתר עוד לא מחובר למסד הנתונים."
+      : S.loadError ? "אין חיבור כרגע. הנתונים יתעדכנו כשהחיבור יחזור."
+      : !S.ready ? "טוען נתונים…"
+      : `תעריף נוכחי ${Number(S.config.price).toLocaleString("he-IL", { maximumFractionDigits: 4 })} ₪ לקוט״ש כולל מע״מ` + (Number(S.config.fixed) ? ` · דמי קבוע ${ils(S.config.fixed)} לכל חשבון` : "");
+  }
+
+  function tenantMessage(r) {
+    return [
+      `חשבון חשמל · ${meterName(r.meter)}`,
+      `תקופה: ${fmtDate(r.prev.read_on)} – ${fmtDate(r.read_on)}`,
+      `מונה: ${r.prev.reading} ← ${r.reading}`,
+      `צריכה: ${kwh(r.cons)} קוט״ש × ${r.price} ₪${r.fixed ? ` + דמי קבוע ${r.fixed} ₪` : ""}`,
+      `סה״כ לתשלום: ${ils(r.amount)}`,
+      location.href.split("#")[0]
+    ].join("\n");
+  }
+
+  function toast(msg) {
+    $("toast-root").innerHTML = `<div class="toast" role="status">${esc(msg)}</div>`;
+    clearTimeout(toast.t); toast.t = setTimeout(() => $("toast-root").innerHTML = "", 2600);
+  }
+
+  const ERRORS = {
+    bad_pin: "הקוד לא נכון.", not_allowed: "אין לך הרשאה לפעולה הזו.", too_many_attempts: "יותר מדי ניסיונות שגויים. נסה/י שוב בעוד רבע שעה.",
+    reading_lower: "המספר נמוך מהקריאה הקודמת. בדוק/י שוב את המונה.", date_not_after: "התאריך צריך להיות אחרי הקריאה הקודמת.",
+    opening_exists: "כבר יש קריאות למונה הזה, אז זו לא יכולה להיות קריאת פתיחה.", future_date: "אי אפשר להזין תאריך עתידי.", bad_input: "אחד הערכים לא תקין."
+  };
+  const errText = (e) => { const msg = e?.message || ""; for (const k in ERRORS) if (msg.includes(k)) return ERRORS[k]; return "הפעולה נכשלה. בדוק/י את החיבור ונסה/י שוב."; };
+  function handleAuthError(e) {
+    if (/bad_pin/.test(e?.message || "")) { S.role = null; S.pin = null; try { localStorage.removeItem("meters.auth"); } catch {} render(); }
+  }
+
+  async function rpc(fn, args) {
+    const { data, error } = await S.sb.rpc(fn, { p_pin: S.pin, ...args });
+    if (error) throw error;
+    if (data && data.error) throw { message: data.error };
+    return data;
+  }
+
+  // ---- events
+  document.addEventListener("click", async (ev) => {
+    const t = ev.target.closest("button"); if (!t) return;
+    if (t.dataset.view) { S.view = t.dataset.view; S.confirmDel = null; if (S.role === "owner") S.entryMeter = S.view; render(); return; }
+    if (t.dataset.entry) { S.entryMeter = t.dataset.entry; S.view = t.dataset.entry; const r = $("in-reading"); if (r) r.value = ""; render(); return; }
+    const act = t.dataset.act;
+    if (act === "login") return openLogin();
+    if (act === "logout") { S.role = null; S.pin = null; try { localStorage.removeItem("meters.auth"); } catch {} render(); toast("יצאת מהחשבון"); return; }
+    if (act === "settings") return openSettings();
+    if (t.dataset.toggle) {
+      const r = S.readings.find(x => x.id === t.dataset.toggle); if (!r) return;
+      try { await rpc("set_paid", { p_id: r.id, p_paid: !r.paid }); toast(!r.paid ? "סומן כשולם" : "סומן כלא שולם"); await load(); }
+      catch (e) { handleAuthError(e); toast(errText(e)); }
+      return;
+    }
+    if (t.dataset.del) {
+      const id = t.dataset.del;
+      if (S.confirmDel !== id) { S.confirmDel = id; renderLedger(); return; }
+      S.confirmDel = null;
+      try { await rpc("delete_reading", { p_id: id }); toast("הקריאה נמחקה"); await load(); }
+      catch (e) { handleAuthError(e); toast(errText(e)); renderLedger(); }
+      return;
+    }
+    if (t.dataset.copy) {
+      const r = rowsOf(S.view).find(x => x.id === t.dataset.copy); if (!r) return;
+      const text = tenantMessage(r);
+      try { await navigator.clipboard.writeText(text); toast("ההודעה הועתקה. אפשר להדביק בוואטסאפ"); }
+      catch { openCopySheet(text); }
+    }
+  });
+
+  document.addEventListener("input", (ev) => { if (ev.target.id === "in-reading") { $("entry-err").hidden = true; updatePreview(); } });
+
+  document.addEventListener("submit", async (ev) => {
+    if (ev.target.id !== "entry-form") return;
+    ev.preventDefault();
+    const err = $("entry-err");
+    const show = (msg) => { err.textContent = msg; err.hidden = false; };
+    const m = S.role === "owner" ? S.entryMeter : S.role;
+    const n = parseReading(), date = $("in-date").value;
+    const opening = !!$("in-opening")?.checked;
+    if (n == null) return show("הזן/י את המספר שמופיע במונה.");
+    if (Number.isNaN(n) || n < 0) return show("מצב המונה צריך להיות מספר, למשל 12450.");
+    if (!date) return show("בחר/י תאריך קריאה.");
+    if (date > today()) return show("אי אפשר להזין תאריך עתידי.");
+    const rs = rowsOf(m), last = rs[rs.length - 1];
+    if (last && n < last.reading) return show(`המספר נמוך מהקריאה הקודמת (${last.reading}). בדוק/י שוב את המונה.`);
+    if (last && date <= last.read_on) return show(`התאריך צריך להיות אחרי הקריאה הקודמת (${fmtDate(last.read_on)}).`);
+    S.busy = true; renderEntry();
+    try {
+      await rpc("add_reading", { p_meter: m, p_reading: n, p_read_on: date, p_opening: opening });
+      S.busy = false;
+      const r = $("in-reading"); if (r) r.value = "";
+      await load();
+      const nl = rowsOf(m).at(-1);
+      toast(nl?.amount != null ? `נשמר · ${ils(nl.amount)} לתשלום` : nl?.cons != null ? `נשמר · ${kwh(nl.cons)} קוט״ש` : "הקריאה נשמרה");
+    } catch (e) {
+      S.busy = false; handleAuthError(e); renderEntry();
+      const e2 = $("entry-err"); if (e2) { e2.textContent = errText(e); e2.hidden = false; }
+    }
+  });
+
+  function closeSheet() { $("sheet-root").innerHTML = ""; }
+  function bindSheet() {
+    $("sheet-close").onclick = closeSheet;
+    $("sheet-root").querySelector("[data-bg]").onclick = (e) => { if (e.target.hasAttribute("data-bg")) closeSheet(); };
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+  function openLogin() {
+    if (!S.sb) return toast("האתר עוד לא מחובר למסד הנתונים.");
+    $("sheet-root").innerHTML = `<div class="sheet-bg" data-bg><div class="sheet" role="dialog" aria-modal="true" aria-label="כניסה עם קוד">
+      <h2>כניסה עם קוד</h2><p class="hint">הקוד שקיבלת מבעל הבית. הכניסה נשמרת במכשיר הזה.</p>
+      <form id="login-form" novalidate>
+        <div class="field"><label for="in-pin">קוד</label><input id="in-pin" class="big" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></div>
+        <p class="err" id="login-err" hidden></p>
+        <div class="sheet-foot"><button class="btn primary" type="submit" id="login-go">כניסה</button><button class="btn" type="button" id="sheet-close">ביטול</button></div>
+      </form></div></div>`;
+    bindSheet(); $("in-pin").focus();
+    $("login-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const pin = $("in-pin").value.trim(), er = $("login-err");
+      if (!pin) { er.textContent = "הזן/י קוד."; er.hidden = false; return; }
+      $("login-go").disabled = true;
+      const { data, error } = await S.sb.rpc("check_pin", { p_pin: pin });
+      $("login-go").disabled = false;
+      if (error || !data) { er.textContent = error ? errText(error) : "הקוד לא נכון."; er.hidden = false; return; }
+      S.pin = pin; S.role = data;
+      try { localStorage.setItem("meters.auth", JSON.stringify({ pin, role: data })); } catch {}
+      if (data !== "owner") { S.view = data; S.entryMeter = data; } else { S.entryMeter = S.view; }
+      closeSheet(); render(); toast(`שלום, ${roleName(data)}`);
+    };
+  }
+
+  function openCopySheet(text) {
+    $("sheet-root").innerHTML = `<div class="sheet-bg" data-bg><div class="sheet" role="dialog" aria-modal="true" aria-label="הודעה לשוכר">
+      <h2>הודעה לשוכר</h2><p class="hint">סמן/י והעתק/י את הטקסט:</p>
+      <textarea id="copy-text" rows="7" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)">${esc(text)}</textarea>
+      <div class="sheet-foot"><button class="btn" type="button" id="sheet-close">סגירה</button></div></div></div>`;
+    bindSheet(); const ta = $("copy-text"); ta.focus(); ta.select();
+  }
+
+  function openSettings() {
+    const c = S.config;
+    $("sheet-root").innerHTML = `<div class="sheet-bg" data-bg><div class="sheet" role="dialog" aria-modal="true" aria-label="תעריף והגדרות">
+      <h2>תעריף והגדרות</h2>
+      <p class="hint">שינוי תעריף חל רק על קריאות חדשות. קריאות קודמות נשארות לפי התעריף שהיה בזמנן.</p>
+      <form id="settings-form" novalidate>
+        <div class="grid2">
+          <div class="field"><label for="set-price">מחיר לקוט״ש <small>(₪ כולל מע״מ)</small></label><input id="set-price" inputmode="decimal" class="num" value="${c.price}"></div>
+          <div class="field"><label for="set-fixed">דמי קבוע לחשבון <small>(₪, לא חובה)</small></label><input id="set-fixed" inputmode="decimal" class="num" value="${c.fixed || 0}"></div>
+          ${["upper", "lower"].map(k => `
+          <div class="field"><label for="set-name-${k}">שם המונה</label><input id="set-name-${k}" value="${esc(c["name_" + k])}"></div>
+          <div class="field"><label for="set-tenant-${k}">שם השוכר</label><input id="set-tenant-${k}" value="${esc(c["tenant_" + k])}" placeholder="לא חובה"></div>`).join("")}
+        </div>
+        <p class="err" id="set-err" hidden></p>
+        <div class="sheet-foot"><button class="btn primary" type="submit">שמירה</button><button class="btn" type="button" id="sheet-close">ביטול</button></div>
+      </form></div></div>`;
+    bindSheet();
+    $("settings-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const er = $("set-err");
+      const price = Number($("set-price").value.replace(",", ".")), fixed = Number(($("set-fixed").value || "0").replace(",", "."));
+      if (!(price > 0) || price > 10) { er.textContent = "המחיר לקוט״ש צריך להיות מספר חיובי, למשל 0.64."; er.hidden = false; return; }
+      if (!(fixed >= 0)) { er.textContent = "דמי הקבוע צריכים להיות 0 או יותר."; er.hidden = false; return; }
+      try {
+        await rpc("save_config", { p_price: price, p_fixed: fixed,
+          p_name_upper: $("set-name-upper").value, p_name_lower: $("set-name-lower").value,
+          p_tenant_upper: $("set-tenant-upper").value, p_tenant_lower: $("set-tenant-lower").value });
+        closeSheet(); toast("ההגדרות נשמרו"); await load();
+      } catch (e2) { handleAuthError(e2); er.textContent = errText(e2); er.hidden = false; }
+    };
+  }
+
+  // ---- data
+  async function load() {
+    try {
+      const [cfg, rd] = await Promise.all([
+        S.sb.from("meter_config").select("*").eq("id", 1).maybeSingle(),
+        S.sb.from("meter_readings").select("*").order("read_on").limit(5000)
+      ]);
+      if (cfg.error) throw cfg.error; if (rd.error) throw rd.error;
+      if (cfg.data) S.config = { ...S.config, ...cfg.data, price: Number(cfg.data.price), fixed: Number(cfg.data.fixed) };
+      S.readings = rd.data || [];
+      S.ready = true; S.loadError = false;
+    } catch { S.loadError = true; }
+    render();
+  }
+
+  render();
+  if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
+    S.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+    load();
+    let t;
+    const soon = () => { clearTimeout(t); t = setTimeout(load, 300); };
+    S.sb.channel("meters")
+      .on("postgres_changes", { event: "*", schema: "public", table: "meter_readings" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meter_config" }, soon)
+      .subscribe();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) soon(); });
+  } else render();
+})();
+</script>
+</body>
+</html>
