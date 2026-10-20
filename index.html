@@ -169,8 +169,8 @@ td.mono{font-family:var(--f-mono)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script>
 // ---- connection (the publishable key is public by design; all writes are checked by codes in the database)
-const SUPABASE_URL = "";
-const SUPABASE_KEY = "";
+const SUPABASE_URL = "https://bmvdinsseteaoagyrzhu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_zY9627DenTJLQif5SuOi1A_jh-whrnA";
 
 (() => {
   const METERS = ["main", "upper", "lower"];
@@ -418,7 +418,7 @@ const SUPABASE_KEY = "";
   }
 
   async function rpc(fn, args) {
-    const { data, error } = await S.sb.rpc(fn, { p_pin: S.pin, ...args });
+    const { data, error } = await S.sb.rpc("meters_" + fn, { p_pin: S.pin, ...args });
     if (error) throw error;
     if (data && data.error) throw { message: data.error };
     return data;
@@ -508,7 +508,7 @@ const SUPABASE_KEY = "";
       const pin = $("in-pin").value.trim(), er = $("login-err");
       if (!pin) { er.textContent = "הזן/י קוד."; er.hidden = false; return; }
       $("login-go").disabled = true;
-      const { data, error } = await S.sb.rpc("check_pin", { p_pin: pin });
+      const { data, error } = await S.sb.rpc("meters_check_pin", { p_pin: pin });
       $("login-go").disabled = false;
       if (error || !data) { er.textContent = error ? errText(error) : "הקוד לא נכון."; er.hidden = false; return; }
       S.pin = pin; S.role = data;
@@ -561,13 +561,10 @@ const SUPABASE_KEY = "";
   // ---- data
   async function load() {
     try {
-      const [cfg, rd] = await Promise.all([
-        S.sb.from("meter_config").select("*").eq("id", 1).maybeSingle(),
-        S.sb.from("meter_readings").select("*").order("read_on").limit(5000)
-      ]);
-      if (cfg.error) throw cfg.error; if (rd.error) throw rd.error;
-      if (cfg.data) S.config = { ...S.config, ...cfg.data, price: Number(cfg.data.price), fixed: Number(cfg.data.fixed) };
-      S.readings = rd.data || [];
+      const { data, error } = await S.sb.rpc("meters_get_data");
+      if (error) throw error;
+      if (data?.config) S.config = { ...S.config, ...data.config, price: Number(data.config.price), fixed: Number(data.config.fixed) };
+      S.readings = data?.readings || [];
       S.ready = true; S.loadError = false;
     } catch { S.loadError = true; }
     render();
@@ -579,10 +576,7 @@ const SUPABASE_KEY = "";
     load();
     let t;
     const soon = () => { clearTimeout(t); t = setTimeout(load, 300); };
-    S.sb.channel("meters")
-      .on("postgres_changes", { event: "*", schema: "public", table: "meter_readings" }, soon)
-      .on("postgres_changes", { event: "*", schema: "public", table: "meter_config" }, soon)
-      .subscribe();
+    setInterval(() => { if (!document.hidden) load(); }, 30000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) soon(); });
   } else render();
 })();
